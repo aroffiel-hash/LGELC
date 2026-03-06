@@ -418,7 +418,7 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
       </select>
       <div style="flex:1"></div>
       <button class="btn btn-outline" onclick="saveState(true)">GUARDAR EN NAVEGADOR</button>
-      <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR TXT (LLM)</button>
+      <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
     </div>
     <div class="tbl-wrap">
@@ -806,7 +806,7 @@ function exportRaw() {
     meta: {
       tool: 'LA GEMA LIVE REGISTRO',
       generatedAt: new Date().toISOString(),
-      note: 'Datos crudos para pegar en un LLM y reconstruir el Excel si es necesario.'
+      note: 'Datos crudos de respaldo para poder reconstruir el Excel si es necesario.'
     },
     config: {
       pctKof: parseFloat(document.getElementById('pct-kof').value) || 0,
@@ -820,7 +820,7 @@ function exportRaw() {
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
-      log('TXT estructurado copiado al portapapeles. Pégalo en tu LLM como respaldo.', 'ok');
+      log('TXT estructurado copiado al portapapeles como respaldo.', 'ok');
     }).catch(() => {
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
