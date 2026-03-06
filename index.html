@@ -417,7 +417,7 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
         <option value="Cancelado">Cancelado</option>
       </select>
       <div style="flex:1"></div>
-      <button class="btn btn-outline" onclick="saveState(true)">GUARDAR EN NAVEGADOR</button>
+      <button class="btn btn-outline" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button>
       <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
     </div>
@@ -464,6 +464,46 @@ const PRICES = {
 };
 const CONSOLA_DESC = -200;
 const API = 'https://api.start.gg/gql/alpha';
+
+const SUPABASE_URL = 'https://uftcbxwckufxnkikykxi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Ax41CxKzvTBMfoYIufSZeA_GGt4foKb';
+
+async function syncRemote() {
+  try {
+    const payload = {
+      torneoSlug: document.getElementById('slug')?.value || null,
+      snapshot: {
+        rows,
+        config: {
+          pctKof:  parseFloat(document.getElementById('pct-kof').value) || 0,
+          pctCotw: parseFloat(document.getElementById('pct-cotw').value) || 0,
+          matcherino: parseFloat(document.getElementById('matcherino').value) || 0
+        },
+        savedAt: new Date().toISOString()
+      }
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({
+        torneo_slug: payload.torneoSlug,
+        snapshot: payload.snapshot
+      })
+    });
+
+    if (!res.ok) throw new Error('Error guardando en Supabase');
+    log('Cambios confirmados y guardados en el servidor.', 'ok');
+  } catch (e) {
+    console.error(e);
+    log('No se pudo guardar en el servidor. Revisa conexión o usa respaldo TXT/Excel.', 'err');
+  }
+}
 
 function saveState(manual=false) {
   try {
@@ -732,9 +772,28 @@ function exportExcel() {
 
   // --- HOJA 1: REGISTRO ---
   const wsR = XLSX.utils.aoa_to_sheet([
-    ['Metodo', 'Participante', 'Comp. 2 Días ($750)', 'Comp. 1 Día ($550)', 'Esp. 2 Días ($500)', 'Esp. 1 Día ($300)', 'Internacional ($800)', 'Desc. Consola (-$200)', 'KOF XV', 'FF COTW', 'Total Pagado'],
-    ['Asistentes', { f: `COUNTA(B4:B${MAX})` }, ...'CDEFGHIJ'.split('').map(c => ({ f: `COUNTIF(${c}4:${c}${MAX},TRUE)` })), ''],
-    ['Total $', '', ...['C2*750','D2*550','E2*500','F2*300','G2*800','H2*-200','',''].map(f => f ? { f } : ''), { f: 'SUM(C3:H3)' }],
+    ['Metodo', 'Participante', 'Comp. 2 Días ($750)', 'Comp. 1 Día ($550)', 'Esp. 2 Días ($500)', 'Esp. 1 Día ($300)', 'Internacional ($800)', 'Desc. Consola (-$200)', 'KOF XV', 'FF COTW', 'Total Pagado', 'Pago confirmado'],
+    [
+      'Asistentes',
+      { f: `COUNTA(B4:B${MAX})` },
+      ...'CDEFGHIJ'.split('').map(c => ({ f: `COUNTIF(${c}4:${c}${MAX},TRUE)` })), // cuenta booleans de C a J
+      '',
+      { f: `COUNTIF(L4:L${MAX},TRUE)` } // cuántos pagos confirmados
+    ],
+    [
+      'Total $',
+      '',
+      { f: 'C2*750' },
+      { f: 'D2*550' },
+      { f: 'E2*500' },
+      { f: 'F2*300' },
+      { f: 'G2*800' },
+      { f: 'H2*-200' },
+      '',
+      '',
+      { f: 'SUM(C3:H3)' },
+      ''
+    ],
     ...rows.map((r, idx) => {
       const excelRow = idx + 4; // primera fila de datos en Excel
       const totalFormula = `C${excelRow}*750 + D${excelRow}*550 + E${excelRow}*500 + F${excelRow}*300 + G${excelRow}*800 + H${excelRow}*-200`;
@@ -749,14 +808,15 @@ function exportExcel() {
         r.consola,
         r.events.includes('KOF XV'),
         r.events.includes('FF COTW'),
-        { f: totalFormula }
+        { f: totalFormula },
+        r.estado === 'Confirmado'
       ];
     })
   ]);
 
-  wsR['!cols'] = [8, 22, 18, 18, 18, 18, 18, 18, 12, 12, 15].map(w => ({ wch: w }));
+  wsR['!cols'] = [8, 22, 18, 18, 18, 18, 18, 18, 12, 12, 15, 14].map(w => ({ wch: w }));
   wsR['!freeze'] = { xSplit: 0, ySplit: 3 };
-  wsR['!autofilter'] = { ref: 'A1:K1' };
+  wsR['!autofilter'] = { ref: 'A1:L1' };
 
   // estilos básicos (si la versión de XLSX lo permite)
   const headerStyle = {
@@ -768,10 +828,10 @@ function exportExcel() {
     fill: { fgColor: { rgb: 'EEEEEE' } }
   };
 
-  ['A1','B1','C1','D1','E1','F1','G1','H1','I1','J1','K1'].forEach(addr => {
+  ['A1','B1','C1','D1','E1','F1','G1','H1','I1','J1','K1','L1'].forEach(addr => {
     if (wsR[addr]) wsR[addr].s = headerStyle;
   });
-  ['A2','B2','C2','D2','E2','F2','G2','H2','I2','J2','K2','A3','B3','C3','D3','E3','F3','G3','H3','I3','J3','K3'].forEach(addr => {
+  ['A2','B2','C2','D2','E2','F2','G2','H2','I2','J2','K2','L2','A3','B3','C3','D3','E3','F3','G3','H3','I3','J3','K3','L3'].forEach(addr => {
     if (wsR[addr]) wsR[addr].s = subHeaderStyle;
   });
   ['C3','D3','E3','F3','G3','H3','K3'].forEach(addr => {
