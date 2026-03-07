@@ -471,8 +471,9 @@ const SUPABASE_ANON_KEY = 'sb_publishable_Ax41CxKzvTBMfoYIufSZeA_GGt4foKb';
 
 async function syncRemote() {
   try {
+    const torneoSlug = document.getElementById('slug')?.value?.trim() || null;
     const payload = {
-      torneoSlug: document.getElementById('slug')?.value || null,
+      torneoSlug,
       snapshot: {
         rows,
         config: {
@@ -484,12 +485,22 @@ async function syncRemote() {
       }
     };
 
+    const authHeaders = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+    };
+
+    // Overwrite: delete existing row(s) for this slug so we don't accumulate duplicates
+    const delUrl = (torneoSlug == null || torneoSlug === '')
+      ? `${SUPABASE_URL}/rest/v1/registros?torneo_slug=is.null`
+      : `${SUPABASE_URL}/rest/v1/registros?torneo_slug=eq.${encodeURIComponent(torneoSlug)}`;
+    await fetch(delUrl, { method: 'DELETE', headers: authHeaders });
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/registros`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        ...authHeaders,
         Prefer: 'return=minimal'
       },
       body: JSON.stringify({
