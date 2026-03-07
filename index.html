@@ -420,6 +420,7 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
       <button class="btn btn-outline" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button> <!-- saveState = localStorage; syncRemote = Supabase -->
       <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
+      <button class="btn btn-outline" onclick="exportSupabaseToExcel()">SUPABASE → EXCEL</button>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -859,6 +860,57 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, wsA, 'ATTENDEES');
 
   XLSX.writeFile(wb, `LA_GEMA_Registro_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+async function exportSupabaseToExcel() {
+  try {
+    log('Descargando registros de Supabase…', 'ok');
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros?order=created_at.desc`, {
+      headers: {
+        'Accept': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) throw new Error('No se pudo leer Supabase. Revisa RLS (permiso SELECT en registros).');
+    const registros = await res.json();
+    const flat = [];
+    for (const rec of registros) {
+      const snapshot = rec.snapshot || {};
+      const rows = snapshot.rows || [];
+      const savedAt = snapshot.savedAt || rec.created_at || '';
+      const slug = rec.torneo_slug || '';
+      for (const r of rows) {
+        const monto = r.estado === 'Cancelado' ? 0 : (r.internacional ? 800 : (PRICES[r.pase] || 0)) + (r.consola ? CONSOLA_DESC : 0);
+        flat.push({
+          'Guardado (fecha)': savedAt,
+          'Torneo': slug,
+          'Gamertag': r.gamertag || '',
+          'Nombre': r.name || '',
+          'País': r.country || '',
+          'Eventos': Array.isArray(r.events) ? r.events.join(', ') : (r.events || ''),
+          'Tipo de Pase': r.pase || '',
+          'Consola': r.consola ? 'Sí' : '',
+          'Método': r.metodo || '',
+          'Monto': monto,
+          'Estado': r.estado || ''
+        });
+      }
+    }
+    if (!flat.length) {
+      log('No hay registros en Supabase o la tabla está vacía.', 'err');
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(flat);
+    ws['!cols'] = [{ wch: 22 }, { wch: 45 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Supabase registros');
+    XLSX.writeFile(wb, `LA_GEMA_Supabase_${new Date().toISOString().split('T')[0]}.xlsx`);
+    log(`Excel descargado: ${flat.length} filas desde Supabase.`, 'ok');
+  } catch (e) {
+    console.error(e);
+    log(e.message || 'Error al exportar Supabase a Excel.', 'err');
+  }
 }
 
 function exportRaw() {
@@ -1355,6 +1407,7 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
       <button class="btn btn-outline" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button> <!-- saveState = localStorage; syncRemote = Supabase -->
       <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
+      <button class="btn btn-outline" onclick="exportSupabaseToExcel()">SUPABASE → EXCEL</button>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -1794,6 +1847,57 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, wsA, 'ATTENDEES');
 
   XLSX.writeFile(wb, `LA_GEMA_Registro_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+async function exportSupabaseToExcel() {
+  try {
+    log('Descargando registros de Supabase…', 'ok');
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros?order=created_at.desc`, {
+      headers: {
+        'Accept': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) throw new Error('No se pudo leer Supabase. Revisa RLS (permiso SELECT en registros).');
+    const registros = await res.json();
+    const flat = [];
+    for (const rec of registros) {
+      const snapshot = rec.snapshot || {};
+      const rows = snapshot.rows || [];
+      const savedAt = snapshot.savedAt || rec.created_at || '';
+      const slug = rec.torneo_slug || '';
+      for (const r of rows) {
+        const monto = r.estado === 'Cancelado' ? 0 : (r.internacional ? 800 : (PRICES[r.pase] || 0)) + (r.consola ? CONSOLA_DESC : 0);
+        flat.push({
+          'Guardado (fecha)': savedAt,
+          'Torneo': slug,
+          'Gamertag': r.gamertag || '',
+          'Nombre': r.name || '',
+          'País': r.country || '',
+          'Eventos': Array.isArray(r.events) ? r.events.join(', ') : (r.events || ''),
+          'Tipo de Pase': r.pase || '',
+          'Consola': r.consola ? 'Sí' : '',
+          'Método': r.metodo || '',
+          'Monto': monto,
+          'Estado': r.estado || ''
+        });
+      }
+    }
+    if (!flat.length) {
+      log('No hay registros en Supabase o la tabla está vacía.', 'err');
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(flat);
+    ws['!cols'] = [{ wch: 22 }, { wch: 45 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Supabase registros');
+    XLSX.writeFile(wb, `LA_GEMA_Supabase_${new Date().toISOString().split('T')[0]}.xlsx`);
+    log(`Excel descargado: ${flat.length} filas desde Supabase.`, 'ok');
+  } catch (e) {
+    console.error(e);
+    log(e.message || 'Error al exportar Supabase a Excel.', 'err');
+  }
 }
 
 function exportRaw() {
