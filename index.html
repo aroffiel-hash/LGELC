@@ -762,7 +762,7 @@ function renderTable() {
 
 function editRow(idx, field, val) {
   rows[idx][field] = val;
-  updateStats(); recalcPrizes();
+  updateStats(); recalcPrizes(); renderTable();
   saveState();
 }
 
@@ -1697,7 +1697,7 @@ function renderTable() {
 
 function editRow(idx, field, val) {
   rows[idx][field] = val;
-  updateStats(); recalcPrizes();
+  updateStats(); recalcPrizes(); renderTable();
   saveState();
 }
 
