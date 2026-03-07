@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { torneoSlug, snapshot } = req.body; // snapshot = { rows, config, meta }
+    const { torneoSlug, snapshot } = req.body;
 
     if (!snapshot || !snapshot.rows) {
       return res.status(400).json({ error: 'Snapshot inválido' });
