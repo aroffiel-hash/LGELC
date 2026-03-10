@@ -417,10 +417,20 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
         <option value="Cancelado">Cancelado</option>
       </select>
       <div style="flex:1"></div>
+      <button class="btn btn-outline" onclick="toggleSpectatorForm(true)">REGISTRAR ESPECTADOR</button>
       <button class="btn btn-outline" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button>
       <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
-      <button class="btn btn-outline" onclick="exportSupabaseToExcel()">SUPABASE → EXCEL</button>
+    </div>
+    <div id="spectator-form" class="spectator-form" style="display:none; margin:8px 0; padding:8px; border:1px solid var(--border2); border-radius:6px; background:rgba(0,0,0,.4); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <span style="font-size:11px; color:var(--mute); letter-spacing:1px; text-transform:uppercase;">Nuevo espectador</span>
+      <input id="spec-name" type="text" placeholder="Gamertag / Nombre" style="flex:1; min-width:140px;">
+      <select id="spec-pase" style="min-width:170px;">
+        <option value="Espectador 1 Día">Espectador 1 Día ($300)</option>
+        <option value="Espectador 2 Días">Espectador 2 Días ($500)</option>
+      </select>
+      <button class="btn btn-gem" onclick="addSpectator()">GUARDAR</button>
+      <button class="btn btn-outline" onclick="toggleSpectatorForm(false)">CANCELAR</button>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -436,10 +446,11 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
             <th>Metodo</th>
             <th>Monto</th>
             <th>Estado</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="tbl-body">
-          <tr class="empty-row"><td colspan="10">// SIN DATOS — SYNC START.GG</td></tr>
+          <tr class="empty-row"><td colspan="11">// SIN DATOS — SYNC START.GG</td></tr>
         </tbody>
       </table>
     </div>
@@ -471,9 +482,8 @@ const SUPABASE_ANON_KEY = 'sb_publishable_Ax41CxKzvTBMfoYIufSZeA_GGt4foKb';
 
 async function syncRemote() {
   try {
-    const torneoSlug = document.getElementById('slug')?.value?.trim() || null;
     const payload = {
-      torneoSlug,
+      torneoSlug: document.getElementById('slug')?.value || null,
       snapshot: {
         rows,
         config: {
@@ -485,22 +495,12 @@ async function syncRemote() {
       }
     };
 
-    const authHeaders = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-    };
-
-    // Overwrite: delete existing row(s) for this slug so we don't accumulate duplicates
-    const delUrl = (torneoSlug == null || torneoSlug === '')
-      ? `${SUPABASE_URL}/rest/v1/registros?torneo_slug=is.null`
-      : `${SUPABASE_URL}/rest/v1/registros?torneo_slug=eq.${encodeURIComponent(torneoSlug)}`;
-    await fetch(delUrl, { method: 'DELETE', headers: authHeaders });
-
     const res = await fetch(`${SUPABASE_URL}/rest/v1/registros`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...authHeaders,
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         Prefer: 'return=minimal'
       },
       body: JSON.stringify({
@@ -738,7 +738,7 @@ function renderTable() {
 
   if (!filtered.length) {
     document.getElementById('tbl-body').innerHTML =
-      `<tr class="empty-row"><td colspan="10">${rows.length ? '// SIN RESULTADOS' : '// SIN DATOS — SYNC START.GG'}</td></tr>`;
+      `<tr class="empty-row"><td colspan="11">${rows.length ? '// SIN RESULTADOS' : '// SIN DATOS — SYNC START.GG'}</td></tr>`;
     return;
   }
 
@@ -768,6 +768,11 @@ function renderTable() {
           ${ESTADO_OPTS.map(s=>`<option ${r.estado===s?'selected':''}>${s}</option>`).join('')}
         </select>
       </td>
+      <td style="text-align:center">
+        <button class="btn-icon" onclick="deleteRow(${idx})" title="Eliminar registro">
+          🗑
+        </button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -776,6 +781,61 @@ function editRow(idx, field, val) {
   rows[idx][field] = val;
   updateStats(); recalcPrizes(); renderTable();
   saveState();
+}
+
+function toggleSpectatorForm(show) {
+  const box = document.getElementById('spectator-form');
+  if (!box) return;
+  box.style.display = show ? 'flex' : 'none';
+  if (show) {
+    const inp = document.getElementById('spec-name');
+    if (inp) inp.focus();
+  }
+}
+
+function addSpectator() {
+  const nameInput = document.getElementById('spec-name');
+  const paseSelect = document.getElementById('spec-pase');
+  if (!nameInput || !paseSelect) return;
+
+  const name = nameInput.value.trim();
+  const pase = paseSelect.value;
+  if (!name) {
+    log('Escribe un gamertag/nombre para el espectador.', 'err');
+    return;
+  }
+
+  const nuevo = {
+    gamertag: name,
+    name: '',
+    country: 'Mexico',
+    events: [],
+    pase,
+    consola: false,
+    metodo: '',
+    estado: 'Pendiente',
+    notas: '',
+    internacional: false
+  };
+
+  rows.push(nuevo);
+  updateStats(); renderTable(); recalcPrizes();
+  saveState(true);
+
+  nameInput.value = '';
+  paseSelect.value = 'Espectador 1 Día';
+  toggleSpectatorForm(false);
+}
+
+function deleteRow(idx) {
+  if (idx < 0 || idx >= rows.length) return;
+  const r = rows[idx];
+  const label = r.gamertag || r.name || 'este registro';
+  if (!confirm(`¿Eliminar el registro de ${label}?`)) return;
+
+  rows.splice(idx, 1);
+  updateStats(); renderTable(); recalcPrizes();
+  saveState(true);
 }
 
 function exportExcel() {
@@ -871,57 +931,6 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, wsA, 'ATTENDEES');
 
   XLSX.writeFile(wb, `LA_GEMA_Registro_${new Date().toISOString().split('T')[0]}.xlsx`);
-}
-
-async function exportSupabaseToExcel() {
-  try {
-    log('Descargando registros de Supabase…', 'ok');
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros?order=created_at.desc`, {
-      headers: {
-        'Accept': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      }
-    });
-    if (!res.ok) throw new Error('No se pudo leer Supabase. Revisa RLS (permiso SELECT en registros).');
-    const registros = await res.json();
-    const flat = [];
-    for (const rec of registros) {
-      const snapshot = rec.snapshot || {};
-      const rows = snapshot.rows || [];
-      const savedAt = snapshot.savedAt || rec.created_at || '';
-      const slug = rec.torneo_slug || '';
-      for (const r of rows) {
-        const monto = r.estado === 'Cancelado' ? 0 : (r.internacional ? 800 : (PRICES[r.pase] || 0)) + (r.consola ? CONSOLA_DESC : 0);
-        flat.push({
-          'Guardado (fecha)': savedAt,
-          'Torneo': slug,
-          'Gamertag': r.gamertag || '',
-          'Nombre': r.name || '',
-          'País': r.country || '',
-          'Eventos': Array.isArray(r.events) ? r.events.join(', ') : (r.events || ''),
-          'Tipo de Pase': r.pase || '',
-          'Consola': r.consola ? 'Sí' : '',
-          'Método': r.metodo || '',
-          'Monto': monto,
-          'Estado': r.estado || ''
-        });
-      }
-    }
-    if (!flat.length) {
-      log('No hay registros en Supabase o la tabla está vacía.', 'err');
-      return;
-    }
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(flat);
-    ws['!cols'] = [{ wch: 22 }, { wch: 45 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Supabase registros');
-    XLSX.writeFile(wb, `LA_GEMA_Supabase_${new Date().toISOString().split('T')[0]}.xlsx`);
-    log(`Excel descargado: ${flat.length} filas desde Supabase.`, 'ok');
-  } catch (e) {
-    console.error(e);
-    log(e.message || 'Error al exportar Supabase a Excel.', 'err');
-  }
 }
 
 function exportRaw() {
