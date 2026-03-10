@@ -182,7 +182,7 @@ body::before {
 .log .ok   { color: #31cc7a; }
 
 /* ── Stats grid ── */
-.stats-grid { display:grid; grid-template-columns: repeat(6,1fr); gap:10px; margin-bottom:18px; }
+.stats-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:10px; margin-bottom:18px; }
 .stat {
   background: var(--panel2); border:1px solid var(--border);
   border-radius:3px; padding:1.1rem 1rem; text-align:center;
@@ -364,6 +364,7 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
     <div class="stat"><div class="n" id="s-cotw">—</div><div class="l">FF COTW</div></div>
     <div class="stat"><div class="n" id="s-both">—</div><div class="l">Ambos</div></div>
     <div class="stat"><div class="n" id="s-conf">—</div><div class="l">Confirmados</div></div>
+    <div class="stat"><div class="n" id="s-spec">—</div><div class="l">Espectadores</div></div>
     <div class="stat money"><div class="n" id="s-mxn">—</div><div class="l">Recaudado</div></div>
   </div>
 
@@ -684,12 +685,17 @@ function updateStats() {
   const kof  = rows.filter(r => r.events.includes('KOF XV')).length;
   const cotw = rows.filter(r => r.events.includes('FF COTW')).length;
   const both = rows.filter(r => r.events.includes('KOF XV') && r.events.includes('FF COTW')).length;
+  const specs = rows.filter(r =>
+    (r.pase === 'Espectador 1 Día' || r.pase === 'Espectador 2 Días') &&
+    r.estado !== 'Cancelado'
+  ).length;
   const mxn  = conf.reduce((s,r) => s + calcMonto(r), 0);
   document.getElementById('s-total').textContent = rows.length;
   document.getElementById('s-kof').textContent   = kof;
   document.getElementById('s-cotw').textContent  = cotw;
   document.getElementById('s-both').textContent  = both;
   document.getElementById('s-conf').textContent  = conf.length;
+   document.getElementById('s-spec').textContent  = specs;
   document.getElementById('s-mxn').textContent   = '$' + mxn.toLocaleString();
 }
 
