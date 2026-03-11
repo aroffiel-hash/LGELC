@@ -161,6 +161,15 @@ body::before {
   border: 1px solid var(--gem); 
 }
 .btn-outline:hover:not(:disabled) { background: #1BC0DA15; }
+.btn-save {
+  background: #f1c40f; color: #000;
+  border: 1px solid #f39c12;
+  box-shadow: 0 0 18px rgba(241,196,15,0.45);
+}
+.btn-save:hover:not(:disabled) {
+  background:#f5d657;
+  box-shadow: 0 0 24px rgba(241,196,15,0.7);
+}
 .btn-export {
   background: #0a1f25; color: var(--gem);
   border: 1px solid var(--gem2);
@@ -419,9 +428,9 @@ td input[type=checkbox] { accent-color:var(--gem); cursor:pointer; width:14px; h
       </select>
       <div style="flex:1"></div>
       <button class="btn btn-outline" onclick="toggleSpectatorForm(true)">REGISTRAR ESPECTADOR</button>
-      <button class="btn btn-outline" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button>
-      <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
+      <button class="btn btn-save" onclick="saveState(true); syncRemote();">CONFIRMAR CAMBIOS</button>
       <button class="btn btn-export" onclick="exportExcel()">EXPORTAR EXCEL</button>
+      <button class="btn btn-outline" onclick="exportRaw()">EXPORTAR RESPALDO TXT</button>
     </div>
     <div id="spectator-form" class="spectator-form" style="display:none; margin:8px 0; padding:8px; border:1px solid var(--border2); border-radius:6px; background:rgba(0,0,0,.4); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <span style="font-size:11px; color:var(--mute); letter-spacing:1px; text-transform:uppercase;">Nuevo espectador</span>
@@ -581,6 +590,14 @@ async function gql(query, variables={}) {
 async function fetchAll() {
   const slug = document.getElementById('slug').value.trim();
   document.getElementById('log').innerHTML = '';
+  // Primero, resguardar el estado actual antes de tocar nada
+  saveState();
+  try {
+    log('Guardando snapshot actual en Supabase...', 'ok');
+    await syncRemote();
+  } catch(e) {
+    // syncRemote ya hace log de error; continuamos con el sync de start.gg
+  }
   log('Conectando con start.gg...');
   try {
     const tData = await gql(`
@@ -634,6 +651,15 @@ async function fetchAll() {
       log(`${eventEntrants[ev.id].length} entrants cargados — "${ev.name}"`, 'ok');
     }
 
+    // Mapa de filas actuales para preservar pagos / método / estado / notas
+    const existingRows = Array.isArray(rows) ? rows.slice() : [];
+    const existingByKey = {};
+    existingRows.forEach(r => {
+      if (!r || !r.gamertag) return;
+      const key = String(r.gamertag).toLowerCase();
+      if (!existingByKey[key]) existingByKey[key] = r;
+    });
+
     const merged = {};
     for (const ev of t.events) {
       const label = guessLabel(ev.name);
@@ -648,19 +674,44 @@ async function fetchAll() {
       }
     }
 
-    rows = Object.values(merged).map(r => {
+    const mergedKeys = new Set(Object.keys(merged));
+    const newRowsFromStartGG = Object.values(merged).map(r => {
       const hasKOF  = r.events.includes('KOF XV');
       const hasCOTW = r.events.includes('FF COTW');
       r.internacional = r.country && r.country !== 'Mexico' && r.country !== 'México';
       if (r.internacional) r.pase = 'Internacional';
       else if (hasKOF && hasCOTW) r.pase = 'Competidor 2 Días';
       else r.pase = 'Competidor 1 Día';
+      const key = r.gamertag.toLowerCase();
+      const existing = existingByKey[key];
+      if (existing) {
+        // Fusiona: mantiene lo capturado en la herramienta (pago, método, estado, notas, etc.)
+        return {
+          ...r,
+          pase: typeof existing.pase !== 'undefined' && existing.pase !== '' ? existing.pase : r.pase,
+          consola: typeof existing.consola === 'boolean' ? existing.consola : !!r.consola,
+          metodo: typeof existing.metodo === 'string' ? existing.metodo : (r.metodo || ''),
+          estado: existing.estado || r.estado || 'Pendiente',
+          notas: typeof existing.notas === 'string' ? existing.notas : (r.notas || ''),
+          internacional: r.internacional
+        };
+      }
       return r;
     });
+
+    // Añade filas que sólo existen localmente (espectadores u otros registros internos)
+    const localOnly = existingRows.filter(r => {
+      if (!r || !r.gamertag) return true;
+      const key = String(r.gamertag).toLowerCase();
+      return !mergedKeys.has(key);
+    });
+
+    rows = [...newRowsFromStartGG, ...localOnly];
     rows.sort((a,b) => a.gamertag.localeCompare(b.gamertag));
 
     log(`SYNC COMPLETO — ${rows.length} jugadores unicos`, 'ok');
     updateStats(); renderTable(); recalcPrizes();
+    saveState();
   } catch(err) {
     log(err.message, 'err');
   }
